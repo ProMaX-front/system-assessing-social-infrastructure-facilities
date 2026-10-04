@@ -47,6 +47,70 @@ export type AnalysisResponse = {
   results: AnalysisResult[];
 };
 
+const ERROR_TRANSLATIONS: Array<[string, string]> = [
+  [
+    "No active account found with the given credentials",
+    "Неверный логин или пароль.",
+  ],
+  [
+    "Authentication credentials were not provided",
+    "Необходимо выполнить вход в систему.",
+  ],
+  [
+    "Given token not valid for any token type",
+    "Сеанс авторизации недействителен. Выполните вход заново.",
+  ],
+  [
+    "Token is invalid or expired",
+    "Срок действия сеанса истёк. Выполните вход заново.",
+  ],
+  ["Invalid token", "Недействительный токен авторизации."],
+  ["Not found", "Запрошенный ресурс не найден."],
+  ["Permission denied", "Недостаточно прав для выполнения операции."],
+  ["Failed to fetch", "Не удалось подключиться к серверу."],
+  ["NetworkError", "Ошибка сетевого подключения."],
+];
+
+function translateError(message: string) {
+  for (const [english, russian] of ERROR_TRANSLATIONS) {
+    if (message.includes(english)) {
+      return russian;
+    }
+  }
+
+  const containsLatinLetters = /[A-Za-z]{3,}/.test(message);
+  return containsLatinLetters
+    ? "Произошла ошибка при выполнении запроса."
+    : message;
+}
+
+function extractErrorMessage(data: unknown): string | null {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const message = extractErrorMessage(item);
+      if (message) return message;
+    }
+  }
+
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (typeof record.detail === "string") {
+      return record.detail;
+    }
+
+    for (const value of Object.values(record)) {
+      const message = extractErrorMessage(value);
+      if (message) return message;
+    }
+  }
+
+  return null;
+}
+
 export function getAccessToken() {
   return localStorage.getItem("access_token");
 }
@@ -70,11 +134,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch {
+    throw new Error(
+      "Не удалось подключиться к серверу. Проверьте, что локальный проект запущен.",
+    );
+  }
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.detail || "Ошибка запроса");
+    const data = await response.json().catch(() => null);
+    const message = extractErrorMessage(data) || "Ошибка выполнения запроса.";
+    throw new Error(translateError(message));
   }
 
   return response.json();
