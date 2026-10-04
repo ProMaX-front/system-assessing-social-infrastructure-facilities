@@ -100,7 +100,7 @@ export default function Dashboard({ user, onLogout }: Props) {
       style: OSM_STYLE,
       center: [65.5412, 57.1522],
       zoom: 12,
-      attributionControl: true,
+      attributionControl: { compact: true },
       locale: {
         "NavigationControl.ZoomIn": "Приблизить",
         "NavigationControl.ZoomOut": "Отдалить",
