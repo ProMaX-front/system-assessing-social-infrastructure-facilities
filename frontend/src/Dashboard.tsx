@@ -5,6 +5,7 @@ import maplibregl, {
   Marker,
   type StyleSpecification,
 } from "maplibre-gl";
+import type { Theme } from "./App";
 import {
   AnalysisResponse,
   analyzePoint,
@@ -14,6 +15,8 @@ import {
 
 type Props = {
   user: { username: string };
+  theme: Theme;
+  onToggleTheme: () => void;
   onLogout: () => void;
 };
 
@@ -77,7 +80,12 @@ function formatDistance(distance: number) {
   return `${(distance / 1000).toFixed(1).replace(".", ",")} км`;
 }
 
-export default function Dashboard({ user, onLogout }: Props) {
+export default function Dashboard({
+  user,
+  theme,
+  onToggleTheme,
+  onLogout,
+}: Props) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const analysisMarker = useRef<Marker | null>(null);
@@ -193,7 +201,7 @@ export default function Dashboard({ user, onLogout }: Props) {
             : "Граф OSM не загружен: временно показаны расстояния по прямой",
         );
       } catch (e) {
-        setStatus(e instanceof Error ? e.message : "Ошибка анализа");
+        setStatus(e instanceof Error ? e.message : "Ошибка анализа.");
       }
     });
 
@@ -208,7 +216,14 @@ export default function Dashboard({ user, onLogout }: Props) {
   useEffect(() => {
     getSocialObjects()
       .then(setObjects)
-      .catch(() => setObjects([]));
+      .catch((error) => {
+        setObjects([]);
+        setStatus(
+          error instanceof Error
+            ? error.message
+            : "Не удалось загрузить социальные объекты.",
+        );
+      });
   }, []);
 
   useEffect(() => {
@@ -291,7 +306,20 @@ export default function Dashboard({ user, onLogout }: Props) {
         </div>
 
         <div className="user-box">
-          <span>{user.username}</span>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={onToggleTheme}
+            aria-label={
+              theme === "light"
+                ? "Переключить на тёмную тему"
+                : "Переключить на светлую тему"
+            }
+          >
+            <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
+            {theme === "light" ? "Тёмная тема" : "Светлая тема"}
+          </button>
+          <span className="username">{user.username}</span>
           <button onClick={onLogout}>Выйти</button>
         </div>
       </header>
