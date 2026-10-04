@@ -1,5 +1,10 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
+export type GeoJsonGeometry = {
+  type: "Point" | "LineString" | "Polygon" | "MultiPolygon";
+  coordinates: unknown;
+};
+
 export type SocialObject = {
   id: number;
   name: string;
@@ -8,16 +13,27 @@ export type SocialObject = {
   address: string;
   longitude: number;
   latitude: number;
+  footprint: GeoJsonGeometry | null;
   capacity: number | null;
   capacity_unit: string;
+  source: string;
+  source_id: string;
 };
 
 export type AnalysisResult = {
   category: string;
+  category_label: string;
   object: SocialObject | null;
   distance_m: number | null;
+  direct_distance_m: number | null;
   normative_distance_m: number | null;
   compliant: boolean | null;
+  route_geometry: {
+    type: "LineString";
+    coordinates: number[][];
+  } | null;
+  route_is_osm: boolean;
+  distance_method: string;
   normative?: {
     legal_document: string;
     legal_clause: string;
@@ -49,13 +65,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getAccessToken();
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.detail || "Ошибка запроса");
   }
+
   return response.json();
 }
 
@@ -64,19 +85,17 @@ export async function login(username: string, password: string) {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
+
   setTokens(data.access, data.refresh);
 }
 
-export async function register(username: string, email: string, password: string) {
-  await request("/auth/register/", {
-    method: "POST",
-    body: JSON.stringify({ username, email, password }),
-  });
-  await login(username, password);
-}
-
 export async function getMe() {
-  return request<{ id: number; username: string; email: string; is_staff: boolean }>("/auth/me/");
+  return request<{
+    id: number;
+    username: string;
+    email: string;
+    is_staff: boolean;
+  }>("/auth/me/");
 }
 
 export async function getSocialObjects() {
