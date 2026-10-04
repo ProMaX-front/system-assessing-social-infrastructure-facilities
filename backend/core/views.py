@@ -1,25 +1,17 @@
-from django.contrib.auth.models import User
-from django.contrib.gis.geos import Point
-from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Distance
-from rest_framework import generics, permissions, status
+from django.contrib.gis.geos import Point
+from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import AdministrativeUnit, SocialObject, Normative
+from .models import AdministrativeUnit, Normative, SocialObject
+from .routing import calculate_pedestrian_route
 from .serializers import (
     AdministrativeUnitSerializer,
     NormativeSerializer,
-    RegisterSerializer,
     SocialObjectSerializer,
     UserSerializer,
 )
-
-
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = RegisterSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class MeView(APIView):
@@ -49,7 +41,7 @@ class SocialObjectListView(generics.ListAPIView):
         category = self.request.query_params.get("category")
         if category:
             qs = qs.filter(category=category)
-        return qs[:5000]
+        return qs[:10000]
 
 
 class NormativeListView(generics.ListAPIView):
@@ -70,19 +62,23 @@ class NearestAnalysisView(APIView):
             lon = float(request.data["longitude"])
         except (KeyError, TypeError, ValueError):
             return Response(
-                {"detail": "Передайте корректные latitude и longitude."},
+                {"detail": "Передайте корректные широту и долготу."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         point = Point(lon, lat, srid=4326)
-        requested_categories = request.data.get("categories") or [value for value, _ in SocialObject.Category.choices]
+        category_labels = dict(SocialObject.Category.choices)
+        requested_categories = request.data.get("categories") or [
+            value for value, _ in SocialObject.Category.choices
+        ]
         results = []
 
         for category in requested_categories:
+            category_label = category_labels.get(category, category)
             nearest = (
                 SocialObject.objects.filter(category=category, is_active=True)
-                .annotate(distance=Distance("geometry", point))
-                .order_by("distance")
+                .annotate(direct_distance=Distance("geometry", point))
+                .order_by("direct_distance")
                 .first()
             )
             normative = (
@@ -94,27 +90,58 @@ class NearestAnalysisView(APIView):
             if nearest is None:
                 results.append({
                     "category": category,
+                    "category_label": category_label,
                     "object": None,
                     "distance_m": None,
+                    "direct_distance_m": None,
                     "normative_distance_m": normative.max_distance_m if normative else None,
                     "compliant": None,
+                    "route_geometry": None,
+                    "route_is_osm": False,
+                    "distance_method": "Объект отсутствует",
                     "message": "Объекты данной категории не найдены.",
                 })
                 continue
 
-            distance_m = round(nearest.distance.m, 1)
+            direct_distance_m = round(nearest.direct_distance.m, 1)
+            route = calculate_pedestrian_route(point, nearest.geometry)
+
+            if route:
+                distance_m = route["distance_m"]
+                route_geometry = route["geometry"]
+                route_is_osm = True
+                distance_method = "По пешеходному графу OpenStreetMap"
+            else:
+                distance_m = direct_distance_m
+                route_geometry = {
+                    "type": "LineString",
+                    "coordinates": [
+                        [lon, lat],
+                        [nearest.geometry.x, nearest.geometry.y],
+                    ],
+                }
+                route_is_osm = False
+                distance_method = "По прямой — дорожный граф OSM ещё не импортирован"
+
             limit = normative.max_distance_m if normative else None
             results.append({
                 "category": category,
+                "category_label": category_label,
                 "object": SocialObjectSerializer(nearest).data,
                 "distance_m": distance_m,
+                "direct_distance_m": direct_distance_m,
                 "normative_distance_m": limit,
                 "compliant": (distance_m <= limit) if limit is not None else None,
+                "route_geometry": route_geometry,
+                "route_is_osm": route_is_osm,
+                "distance_method": distance_method,
                 "normative": NormativeSerializer(normative).data if normative else None,
             })
 
         return Response({
             "point": {"latitude": lat, "longitude": lon},
-            "calculation_method": "geodesic_distance_mvp",
+            "calculation_method": (
+                "pedestrian_osm_graph_with_direct_fallback"
+            ),
             "results": results,
         })
