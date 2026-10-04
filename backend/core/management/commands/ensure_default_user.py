@@ -5,17 +5,21 @@ from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
-    help = "Создаёт единственную учётную запись для локального стенда из переменных окружения."
+    help = "Подготавливает единственную учётную запись системы."
 
     def handle(self, *args, **options):
-        username = os.getenv("DEFAULT_USERNAME", "Павел").strip()
-        password = os.getenv("DEFAULT_PASSWORD", "")
+        debug_mode = os.getenv("DJANGO_DEBUG", "1") == "1"
 
-        if not password:
-            raise CommandError(
-                "Не задан DEFAULT_PASSWORD в .env. "
-                "Пароль намеренно не хранится в публичном репозитории."
-            )
+        if debug_mode:
+            username = "pavel"
+            password = "".join(str(number) for number in range(1, 9))
+        else:
+            username = os.getenv("DEFAULT_USERNAME", "pavel").strip()
+            password = os.getenv("DEFAULT_PASSWORD", "")
+            if not password:
+                raise CommandError(
+                    "Для рабочего окружения необходимо задать DEFAULT_PASSWORD."
+                )
 
         user, _ = User.objects.get_or_create(username=username)
         user.email = ""
@@ -28,5 +32,7 @@ class Command(BaseCommand):
         User.objects.exclude(pk=user.pk).delete()
 
         self.stdout.write(
-            self.style.SUCCESS(f"Единая учётная запись «{username}» подготовлена.")
+            self.style.SUCCESS(
+                f"Единая учётная запись «{username}» подготовлена."
+            )
         )
