@@ -24,6 +24,7 @@ services:
       POSTGRES_HOST: db
     volumes:
       - ./backend:/app
+      - ./data:/data
     ports:
       - "8000:8000"
     depends_on:
@@ -31,6 +32,7 @@ services:
         condition: service_healthy
     command: >
       sh -c "python manage.py migrate &&
+             python manage.py ensure_default_user &&
              python manage.py runserver 0.0.0.0:8000"
 
   frontend:
