@@ -18,8 +18,26 @@ fi
 
 mkdir -p data/osm
 
+echo "Собираю контейнеры..."
+docker compose build
+
+# Выполняем миграции строго одним процессом до запуска backend.
+docker compose stop backend >/dev/null 2>&1 || true
+docker compose up -d db
+
+echo "Ожидаю готовность PostgreSQL/PostGIS..."
+for i in {1..60}; do
+  if docker compose exec -T db pg_isready       -U "${POSTGRES_USER:-infrastructure}"       -d "${POSTGRES_DB:-infrastructure}" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+
+echo "Применяю миграции..."
+docker compose run --rm --no-deps backend python manage.py migrate
+
 echo "Запускаю проект..."
-docker compose up --build -d
+docker compose up -d backend frontend
 
 echo "Ожидаю запуск backend..."
 for i in {1..60}; do
