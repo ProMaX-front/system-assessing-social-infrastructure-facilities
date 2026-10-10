@@ -24,9 +24,10 @@ def haversine_m(lon1, lat1, lon2, lat2):
     return 2 * radius * math.asin(math.sqrt(a))
 
 
-def _nearest_node(point):
+def _nearest_walkable_node(point):
     return (
-        RoadNode.objects.annotate(distance=Distance("geometry", point))
+        RoadNode.objects.filter(walkable=True)
+        .annotate(distance=Distance("geometry", point))
         .order_by("distance")
         .first()
     )
@@ -54,8 +55,8 @@ def calculate_pedestrian_route(start_point, end_point):
     if not RoadEdge.objects.filter(walkable=True).exists():
         return None
 
-    start_node = _nearest_node(start_point)
-    end_node = _nearest_node(end_point)
+    start_node = _nearest_walkable_node(start_point)
+    end_node = _nearest_walkable_node(end_point)
     if not start_node or not end_node:
         return None
 
@@ -68,6 +69,8 @@ def calculate_pedestrian_route(start_point, end_point):
         "target_osm_id",
         "length_m",
         "geometry",
+        "walk_forward",
+        "walk_backward",
     )
 
     edge_count = edges_qs.count()
@@ -77,12 +80,20 @@ def calculate_pedestrian_route(start_point, end_point):
     adjacency = defaultdict(list)
     for edge in edges_qs.iterator(chunk_size=5000):
         coords = list(edge.geometry.coords)
-        adjacency[edge.source_osm_id].append(
-            (edge.target_osm_id, edge.length_m, coords)
-        )
-        adjacency[edge.target_osm_id].append(
-            (edge.source_osm_id, edge.length_m, list(reversed(coords)))
-        )
+
+        if edge.walk_forward:
+            adjacency[edge.source_osm_id].append(
+                (edge.target_osm_id, edge.length_m, coords)
+            )
+
+        if edge.walk_backward:
+            adjacency[edge.target_osm_id].append(
+                (
+                    edge.source_osm_id,
+                    edge.length_m,
+                    list(reversed(coords)),
+                )
+            )
 
     start_id = start_node.osm_id
     end_id = end_node.osm_id
@@ -142,7 +153,10 @@ def calculate_pedestrian_route(start_point, end_point):
     )
 
     return {
-        "distance_m": round(distances[end_id] + connector_start + connector_end, 1),
+        "distance_m": round(
+            distances[end_id] + connector_start + connector_end,
+            1,
+        ),
         "geometry": {
             "type": "LineString",
             "coordinates": route_coords,
