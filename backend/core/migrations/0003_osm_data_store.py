@@ -1,6 +1,7 @@
 from django.db import migrations, models
 import django.contrib.gis.db.models.fields
 import django.db.models.deletion
+import django.utils.timezone
 
 
 class Migration(migrations.Migration):
@@ -102,7 +103,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="socialobject",
             name="updated_at",
-            field=models.DateTimeField(auto_now=True),
+            field=models.DateTimeField(
+                auto_now=True,
+                default=django.utils.timezone.now,
+            ),
+            preserve_default=False,
         ),
         migrations.AddIndex(
             model_name="socialobject",
