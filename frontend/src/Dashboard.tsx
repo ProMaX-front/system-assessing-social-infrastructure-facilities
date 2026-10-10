@@ -247,20 +247,136 @@ function featureProperties(feature: MapGeoJSONFeature | undefined) {
   return (feature?.properties || {}) as Record<string, unknown>;
 }
 
+type RouteCoordinate = [number, number];
+
+type RouteProfile = {
+  coordinates: RouteCoordinate[];
+  cumulative: number[];
+  total: number;
+};
+
+function haversineMeters(a: RouteCoordinate, b: RouteCoordinate) {
+  const radius = 6_371_008.8;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const lat1 = toRadians(a[1]);
+  const lat2 = toRadians(b[1]);
+  const dLat = toRadians(b[1] - a[1]);
+  const dLon = toRadians(b[0] - a[0]);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(dLon / 2) ** 2;
+
+  return 2 * radius * Math.asin(Math.sqrt(h));
+}
+
+function routeBearing(a: RouteCoordinate, b: RouteCoordinate) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const toDegrees = (value: number) => (value * 180) / Math.PI;
+  const lat1 = toRadians(a[1]);
+  const lat2 = toRadians(b[1]);
+  const dLon = toRadians(b[0] - a[0]);
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+  return (toDegrees(Math.atan2(y, x)) + 360) % 360;
+}
+
+function buildRouteProfile(coordinates: number[][]): RouteProfile | null {
+  if (coordinates.length < 2) {
+    return null;
+  }
+
+  const routeCoordinates = coordinates.map(
+    ([lon, lat]) => [lon, lat] as RouteCoordinate,
+  );
+  const cumulative = [0];
+
+  for (let index = 1; index < routeCoordinates.length; index += 1) {
+    cumulative.push(
+      cumulative[index - 1] +
+        haversineMeters(
+          routeCoordinates[index - 1],
+          routeCoordinates[index],
+        ),
+    );
+  }
+
+  return {
+    coordinates: routeCoordinates,
+    cumulative,
+    total: cumulative[cumulative.length - 1],
+  };
+}
+
+function pointAtRouteDistance(profile: RouteProfile, distance: number) {
+  const safeDistance = Math.max(0, Math.min(distance, profile.total));
+
+  let segmentIndex = 1;
+  while (
+    segmentIndex < profile.cumulative.length &&
+    profile.cumulative[segmentIndex] < safeDistance
+  ) {
+    segmentIndex += 1;
+  }
+
+  if (segmentIndex >= profile.coordinates.length) {
+    const last = profile.coordinates.length - 1;
+    return {
+      coordinate: profile.coordinates[last],
+      bearing: routeBearing(
+        profile.coordinates[Math.max(0, last - 1)],
+        profile.coordinates[last],
+      ),
+    };
+  }
+
+  const start = profile.coordinates[segmentIndex - 1];
+  const end = profile.coordinates[segmentIndex];
+  const segmentStartDistance = profile.cumulative[segmentIndex - 1];
+  const segmentLength =
+    profile.cumulative[segmentIndex] - segmentStartDistance;
+  const ratio =
+    segmentLength > 0
+      ? (safeDistance - segmentStartDistance) / segmentLength
+      : 0;
+
+  return {
+    coordinate: [
+      start[0] + (end[0] - start[0]) * ratio,
+      start[1] + (end[1] - start[1]) * ratio,
+    ] as RouteCoordinate,
+    bearing: routeBearing(start, end),
+  };
+}
+
 function createOriginMarker() {
-  const element = document.createElement("div");
-  element.className = "analysis-origin-marker";
-  element.innerHTML =
+  const shell = document.createElement("div");
+  shell.className = "origin-marker-shell";
+
+  const visual = document.createElement("div");
+  visual.className = "analysis-origin-marker";
+  visual.innerHTML =
     '<span class="origin-ring origin-ring-a"></span>' +
     '<span class="origin-ring origin-ring-b"></span>' +
     '<span class="origin-dot"></span>';
-  return element;
+
+  shell.appendChild(visual);
+  return shell;
 }
 
 function createTargetMarker(item: AnalysisResult) {
-  const element = document.createElement("div");
-  element.className = "analysis-target-marker";
-  element.style.setProperty(
+  const shell = document.createElement("div");
+  shell.className = "target-marker-shell";
+
+  const visual = document.createElement("div");
+  visual.className = "analysis-target-marker";
+  visual.style.setProperty(
     "--marker-color",
     CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
   );
@@ -272,10 +388,43 @@ function createTargetMarker(item: AnalysisResult) {
   core.className = "target-marker-core";
   core.textContent = CATEGORY_LETTERS[item.category] || "•";
 
-  element.append(pulse, core);
-  element.title = `${item.category_label}: ${item.object?.name || ""}`;
+  visual.append(pulse, core);
+  visual.title = `${item.category_label}: ${item.object?.name || ""}`;
+  shell.appendChild(visual);
 
-  return element;
+  return shell;
+}
+
+function createWalkerMarker(item: AnalysisResult) {
+  const shell = document.createElement("div");
+  shell.className = "walker-marker-shell";
+  shell.style.setProperty(
+    "--walker-color",
+    CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
+  );
+
+  const rotator = document.createElement("div");
+  rotator.className = "walker-rotator";
+
+  const person = document.createElement("div");
+  person.className = "walker-person";
+  person.innerHTML =
+    '<span class="walker-shadow"></span>' +
+    '<span class="walker-head"></span>' +
+    '<span class="walker-torso"></span>' +
+    '<span class="walker-arm walker-arm-left"></span>' +
+    '<span class="walker-arm walker-arm-right"></span>' +
+    '<span class="walker-leg walker-leg-left"></span>' +
+    '<span class="walker-leg walker-leg-right"></span>';
+
+  const badge = document.createElement("span");
+  badge.className = "walker-limit-badge";
+
+  rotator.append(person, badge);
+  shell.appendChild(rotator);
+  shell.title = `Пешеход: ${item.category_label}`;
+
+  return { shell, rotator, badge };
 }
 
 export default function Dashboard({
@@ -288,6 +437,8 @@ export default function Dashboard({
   const mapRef = useRef<Map | null>(null);
   const analysisMarker = useRef<Marker | null>(null);
   const targetMarkers = useRef<Marker[]>([]);
+  const walkerMarkers = useRef<Marker[]>([]);
+  const walkerAnimationEpoch = useRef(0);
   const requestNumber = useRef(0);
 
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
@@ -642,6 +793,7 @@ export default function Dashboard({
       }
 
       analysisMarker.current?.remove();
+      setAnalysis(null);
       analysisMarker.current = new maplibregl.Marker({
         element: createOriginMarker(),
         anchor: "center",
@@ -680,7 +832,9 @@ export default function Dashboard({
     return () => {
       requestNumber.current += 1;
       analysisMarker.current?.remove();
+      walkerAnimationEpoch.current += 1;
       targetMarkers.current.forEach((marker) => marker.remove());
+      walkerMarkers.current.forEach((marker) => marker.remove());
       map.remove();
       mapRef.current = null;
     };
@@ -693,8 +847,12 @@ export default function Dashboard({
       return;
     }
 
+    const animationEpoch = ++walkerAnimationEpoch.current;
+
     targetMarkers.current.forEach((marker) => marker.remove());
     targetMarkers.current = [];
+    walkerMarkers.current.forEach((marker) => marker.remove());
+    walkerMarkers.current = [];
 
     const routeFeatures: GeoJSON.Feature[] =
       analysis?.results
@@ -733,12 +891,20 @@ export default function Dashboard({
       features: footprintFeatures,
     });
 
-    for (const item of analysis?.results || []) {
+    const routedItems =
+      analysis?.results.filter(
+        (item) =>
+          item.object &&
+          item.route_geometry &&
+          item.route_geometry.coordinates.length >= 2,
+      ) || [];
+
+    routedItems.forEach((item, index) => {
       if (!item.object || !item.route_geometry) {
-        continue;
+        return;
       }
 
-      const marker = new maplibregl.Marker({
+      const targetMarker = new maplibregl.Marker({
         element: createTargetMarker(item),
         anchor: "center",
       })
@@ -747,17 +913,120 @@ export default function Dashboard({
           new maplibregl.Popup({ offset: 24 }).setDOMContent(
             popupNode(item.object.name, [
               ["Категория", item.category_label],
-              ["Расстояние", item.distance_m !== null
-                ? formatDistance(item.distance_m)
-                : ""],
+              [
+                "Расстояние",
+                item.distance_m !== null
+                  ? formatDistance(item.distance_m)
+                  : "",
+              ],
+              [
+                "Норматив",
+                item.normative_distance_m !== null
+                  ? formatDistance(item.normative_distance_m)
+                  : "",
+              ],
               ["Адрес", item.object.address],
             ]),
           ),
         )
         .addTo(map);
 
-      targetMarkers.current.push(marker);
-    }
+      targetMarkers.current.push(targetMarker);
+
+      if (!item.route_is_osm) {
+        return;
+      }
+
+      const profile = buildRouteProfile(
+        item.route_geometry.coordinates,
+      );
+      if (!profile || profile.total <= 0) {
+        return;
+      }
+
+      const routeDistance = item.distance_m || profile.total;
+      const normativeDistance = item.normative_distance_m;
+      const exceedsNormative =
+        normativeDistance !== null &&
+        normativeDistance > 0 &&
+        routeDistance > normativeDistance;
+
+      const targetRatio = exceedsNormative
+        ? Math.max(
+            0,
+            Math.min(1, normativeDistance / routeDistance),
+          )
+        : 1;
+      const targetRouteDistance = profile.total * targetRatio;
+
+      const { shell, rotator, badge } = createWalkerMarker(item);
+      const initial = pointAtRouteDistance(profile, 0);
+
+      const walkerMarker = new maplibregl.Marker({
+        element: shell,
+        anchor: "center",
+      })
+        .setLngLat(initial.coordinate)
+        .addTo(map);
+
+      rotator.style.transform = `rotate(${initial.bearing}deg)`;
+      walkerMarkers.current.push(walkerMarker);
+
+      const delay = 320 + index * 90;
+      const duration =
+        2200 + Math.min(2800, targetRouteDistance * 2.2);
+      const createdAt = performance.now();
+
+      const animate = (now: number) => {
+        if (walkerAnimationEpoch.current !== animationEpoch) {
+          return;
+        }
+
+        const elapsed = now - createdAt - delay;
+        if (elapsed < 0) {
+          requestAnimationFrame(animate);
+          return;
+        }
+
+        const progress = Math.min(1, elapsed / duration);
+        const current = pointAtRouteDistance(
+          profile,
+          targetRouteDistance * progress,
+        );
+
+        walkerMarker.setLngLat(current.coordinate);
+        rotator.style.transform = `rotate(${current.bearing}deg)`;
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+          return;
+        }
+
+        shell.classList.add("is-stopped");
+
+        if (exceedsNormative && normativeDistance !== null) {
+          shell.classList.add("is-limit");
+          badge.textContent = `Норма ${formatDistance(normativeDistance)}`;
+          shell.title =
+            `${item.category_label}: нормативная дистанция исчерпана`;
+        } else {
+          shell.classList.add("is-arrived");
+          badge.textContent = "Доступно";
+          shell.title =
+            `${item.category_label}: объект достигнут в пределах норматива`;
+        }
+      };
+
+      requestAnimationFrame(animate);
+    });
+
+    return () => {
+      walkerAnimationEpoch.current += 1;
+      targetMarkers.current.forEach((marker) => marker.remove());
+      targetMarkers.current = [];
+      walkerMarkers.current.forEach((marker) => marker.remove());
+      walkerMarkers.current = [];
+    };
   }, [analysis, mapReady]);
 
   return (
