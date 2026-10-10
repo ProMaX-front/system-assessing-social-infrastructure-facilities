@@ -94,17 +94,35 @@ export default function App() {
       </button>
 
       <section className="auth-hero">
+        <div className="auth-kicker">
+          <span className="auth-kicker-dot" />
+          Геоинформационная аналитическая система
+        </div>
         <h1>
-          Разработка геоинформационной системы оценки обеспеченности
-          урбанизированной территории объектами социальной инфраструктуры
+          Оценка обеспеченности территории социальной инфраструктурой
         </h1>
         <p>
-          Анализ доступности объектов социальной инфраструктуры и соответствия
-          установленным нормативам.
+          Пространственный анализ объектов, пешеходной доступности и
+          соответствия нормативным расстояниям на основе данных OpenStreetMap
+          и PostGIS.
         </p>
+
+        <div className="auth-feature-row">
+          <span>PostGIS</span>
+          <span>OpenStreetMap</span>
+          <span>Пешеходный граф</span>
+          <span>Пространственный анализ</span>
+        </div>
       </section>
 
       <form className="auth-card" onSubmit={submit}>
+        <div className="auth-card-brand">
+          <span className="auth-card-logo">UA</span>
+          <div>
+            <strong>Urban Access</strong>
+            <span>Исследовательский стенд</span>
+          </div>
+        </div>
         <h2>Вход в систему</h2>
 
         <label>
