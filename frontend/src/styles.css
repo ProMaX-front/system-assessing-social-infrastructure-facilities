@@ -914,6 +914,38 @@ input:focus-visible {
 
 /* Analysis markers */
 
+/*
+ * MapLibre позиционирует переданный DOM-элемент через inline transform.
+ * Поэтому shell-элементы намеренно никогда не анимируют transform:
+ * вся визуальная анимация происходит только внутри них.
+ */
+.origin-marker-shell {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.target-marker-shell {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+}
+
+.walker-marker-shell {
+  --walker-color: #2563eb;
+  position: relative;
+  width: 34px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
 .analysis-origin-marker {
   position: relative;
   width: 30px;
@@ -943,7 +975,12 @@ input:focus-visible {
   inset: 4px;
   border: 1.5px solid rgba(17, 24, 39, 0.36);
   border-radius: 50%;
+  transform-origin: center;
   animation: origin-pulse 2.1s ease-out infinite;
+}
+
+:root[data-theme="dark"] .origin-ring {
+  border-color: rgba(248, 250, 252, 0.38);
 }
 
 .origin-ring-b {
@@ -1003,6 +1040,179 @@ input:focus-visible {
   border-right: 2px solid white;
   border-bottom: 2px solid white;
   border-radius: 2px;
+}
+
+.walker-rotator {
+  position: relative;
+  width: 30px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.walker-person {
+  position: relative;
+  width: 22px;
+  height: 30px;
+  filter: drop-shadow(0 4px 4px rgba(15, 23, 42, 0.24));
+  animation:
+    walker-emerge 0.32s ease-out both,
+    walker-bob 0.48s ease-in-out 0.32s infinite;
+}
+
+.walker-shadow {
+  position: absolute;
+  z-index: 0;
+  left: 5px;
+  bottom: 0;
+  width: 13px;
+  height: 5px;
+  background: rgba(15, 23, 42, 0.17);
+  border-radius: 50%;
+  filter: blur(1px);
+}
+
+.walker-head {
+  position: absolute;
+  z-index: 5;
+  left: 7px;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  background: #f1c7a5;
+  border: 1.5px solid rgba(87, 55, 38, 0.28);
+  border-radius: 50%;
+}
+
+.walker-torso {
+  position: absolute;
+  z-index: 4;
+  left: 6px;
+  top: 7px;
+  width: 10px;
+  height: 13px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 45%),
+    var(--walker-color);
+  border: 1.5px solid white;
+  border-radius: 5px 5px 4px 4px;
+}
+
+.walker-arm {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  width: 4px;
+  height: 11px;
+  background: var(--walker-color);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  transform-origin: 50% 15%;
+}
+
+.walker-arm-left {
+  left: 2px;
+  animation: walker-limb-left 0.48s ease-in-out infinite alternate;
+}
+
+.walker-arm-right {
+  right: 2px;
+  animation: walker-limb-right 0.48s ease-in-out infinite alternate;
+}
+
+.walker-leg {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  width: 4px;
+  height: 10px;
+  background: #334155;
+  border-radius: 999px;
+  transform-origin: 50% 10%;
+}
+
+.walker-leg-left {
+  left: 6px;
+  animation: walker-limb-right 0.48s ease-in-out infinite alternate;
+}
+
+.walker-leg-right {
+  right: 6px;
+  animation: walker-limb-left 0.48s ease-in-out infinite alternate;
+}
+
+.walker-limit-badge {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: -27px;
+  display: none;
+  width: max-content;
+  padding: 4px 7px;
+  color: #b91c1c;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  border-radius: 999px;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.15);
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .walker-limit-badge {
+  color: #fecaca;
+  background: rgba(30, 41, 59, 0.96);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.walker-marker-shell.is-stopped .walker-person,
+.walker-marker-shell.is-stopped .walker-arm,
+.walker-marker-shell.is-stopped .walker-leg {
+  animation: none;
+}
+
+.walker-marker-shell.is-stopped .walker-person {
+  transform: translateY(0);
+}
+
+.walker-marker-shell.is-limit .walker-limit-badge {
+  display: block;
+  animation: limit-badge-in 0.28s ease-out both;
+}
+
+.walker-marker-shell.is-limit .walker-person {
+  filter:
+    drop-shadow(0 0 5px rgba(220, 38, 38, 0.33))
+    drop-shadow(0 4px 4px rgba(15, 23, 42, 0.2));
+}
+
+.walker-marker-shell.is-arrived .walker-person {
+  filter:
+    drop-shadow(0 0 5px rgba(16, 185, 129, 0.28))
+    drop-shadow(0 4px 4px rgba(15, 23, 42, 0.2));
+}
+
+.walker-marker-shell.is-arrived::after {
+  content: "✓";
+  position: absolute;
+  z-index: 9;
+  top: -4px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: #10b981;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.26);
+  font-size: 8px;
+  font-weight: 950;
 }
 
 /* MapLibre */
@@ -1076,6 +1286,56 @@ input:focus-visible {
 }
 
 /* Animations */
+
+@keyframes walker-emerge {
+  from {
+    opacity: 0;
+    filter: blur(3px) drop-shadow(0 4px 4px rgba(15, 23, 42, 0));
+  }
+  to {
+    opacity: 1;
+    filter: blur(0) drop-shadow(0 4px 4px rgba(15, 23, 42, 0.24));
+  }
+}
+
+@keyframes walker-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.4px);
+  }
+}
+
+@keyframes walker-limb-left {
+  from {
+    transform: rotate(24deg);
+  }
+  to {
+    transform: rotate(-24deg);
+  }
+}
+
+@keyframes walker-limb-right {
+  from {
+    transform: rotate(-24deg);
+  }
+  to {
+    transform: rotate(24deg);
+  }
+}
+
+@keyframes limit-badge-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
 
 @keyframes marker-pop {
   from {
