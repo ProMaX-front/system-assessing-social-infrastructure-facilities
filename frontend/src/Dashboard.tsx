@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl, {
   GeoJSONSource,
   Map,
@@ -10,6 +10,7 @@ import maplibregl, {
 import type { Theme } from "./App";
 import {
   AnalysisResponse,
+  AnalysisResult,
   analyzePoint,
   getMapLayers,
 } from "./api";
@@ -35,6 +36,22 @@ const CATEGORY_COLORS: Record<string, string> = {
   culture: "#7c3aed",
   social: "#9333ea",
   other: "#64748b",
+};
+
+const CATEGORY_LETTERS: Record<string, string> = {
+  school: "Ш",
+  kindergarten: "Д",
+  college: "К",
+  university: "В",
+  polyclinic: "П",
+  hospital: "Б",
+  pharmacy: "А",
+  shop: "М",
+  stop: "О",
+  sport: "С",
+  culture: "К",
+  social: "СО",
+  other: "•",
 };
 
 const CATEGORY_COLOR_EXPRESSION: ExpressionSpecification = [
@@ -93,6 +110,103 @@ const EMPTY_GEOJSON: GeoJSON.FeatureCollection = {
   features: [],
 };
 
+type IconName =
+  | "layers"
+  | "route"
+  | "database"
+  | "crosshair"
+  | "sun"
+  | "moon"
+  | "logout"
+  | "check"
+  | "sparkles"
+  | "map";
+
+function UiIcon({
+  name,
+  size = 18,
+}: {
+  name: IconName;
+  size?: number;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  const paths: Record<IconName, JSX.Element> = {
+    layers: (
+      <>
+        <path d="m12 2 9 5-9 5-9-5 9-5Z" />
+        <path d="m3 12 9 5 9-5" />
+        <path d="m3 17 9 5 9-5" />
+      </>
+    ),
+    route: (
+      <>
+        <circle cx="6" cy="19" r="2" />
+        <circle cx="18" cy="5" r="2" />
+        <path d="M8 19h3a4 4 0 0 0 4-4V9a2 2 0 0 1 2-2h1" />
+      </>
+    ),
+    database: (
+      <>
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+        <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+      </>
+    ),
+    crosshair: (
+      <>
+        <circle cx="12" cy="12" r="7" />
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        <circle cx="12" cy="12" r="1.6" />
+      </>
+    ),
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" />
+      </>
+    ),
+    moon: <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />,
+    logout: (
+      <>
+        <path d="M10 5H5v14h5" />
+        <path d="m14 8 4 4-4 4M18 12H9" />
+      </>
+    ),
+    check: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8 12 2.5 2.5L16.5 8.5" />
+      </>
+    ),
+    sparkles: (
+      <>
+        <path d="m12 3 1.3 3.2L16.5 7.5l-3.2 1.3L12 12l-1.3-3.2-3.2-1.3 3.2-1.3L12 3Z" />
+        <path d="m18.5 14 .8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" />
+        <path d="m5 14 .7 1.7 1.8.8-1.8.7L5 19l-.8-1.8-1.7-.7 1.7-.8L5 14Z" />
+      </>
+    ),
+    map: (
+      <>
+        <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
+        <path d="M9 3v15M15 6v15" />
+      </>
+    ),
+  };
+
+  return <svg {...common}>{paths[name]}</svg>;
+}
+
 function formatDistance(distance: number) {
   if (distance < 1000) {
     return `${Math.round(distance)} м`;
@@ -133,6 +247,37 @@ function featureProperties(feature: MapGeoJSONFeature | undefined) {
   return (feature?.properties || {}) as Record<string, unknown>;
 }
 
+function createOriginMarker() {
+  const element = document.createElement("div");
+  element.className = "analysis-origin-marker";
+  element.innerHTML =
+    '<span class="origin-ring origin-ring-a"></span>' +
+    '<span class="origin-ring origin-ring-b"></span>' +
+    '<span class="origin-dot"></span>';
+  return element;
+}
+
+function createTargetMarker(item: AnalysisResult) {
+  const element = document.createElement("div");
+  element.className = "analysis-target-marker";
+  element.style.setProperty(
+    "--marker-color",
+    CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
+  );
+
+  const pulse = document.createElement("span");
+  pulse.className = "target-marker-pulse";
+
+  const core = document.createElement("span");
+  core.className = "target-marker-core";
+  core.textContent = CATEGORY_LETTERS[item.category] || "•";
+
+  element.append(pulse, core);
+  element.title = `${item.category_label}: ${item.object?.name || ""}`;
+
+  return element;
+}
+
 export default function Dashboard({
   user,
   theme,
@@ -142,6 +287,7 @@ export default function Dashboard({
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const analysisMarker = useRef<Marker | null>(null);
+  const targetMarkers = useRef<Marker[]>([]);
   const requestNumber = useRef(0);
 
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
@@ -150,8 +296,17 @@ export default function Dashboard({
     "Загрузка геоданных из PostGIS…",
   );
   const [status, setStatus] = useState(
-    "Нажмите на свободную область карты для анализа выбранной точки",
+    "Выберите точку на карте для расчёта доступности",
   );
+
+  const summary = useMemo(() => {
+    const results = analysis?.results || [];
+    return {
+      found: results.filter((item) => item.object).length,
+      routes: results.filter((item) => item.route_is_osm).length,
+      compliant: results.filter((item) => item.compliant === true).length,
+    };
+  }, [analysis]);
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) {
@@ -210,12 +365,15 @@ export default function Dashboard({
           `здания: ${result.meta.buildings_count}`,
         ];
 
-        if (result.meta.social_objects_truncated || result.meta.buildings_truncated) {
-          parts.push("показана часть объектов — приблизьте карту");
+        if (
+          result.meta.social_objects_truncated ||
+          result.meta.buildings_truncated
+        ) {
+          parts.push("приблизьте карту для полного набора");
         } else if (result.meta.all_buildings_visible) {
-          parts.push("показаны все типы зданий в текущей области");
+          parts.push("все здания текущей области");
         } else {
-          parts.push("для всех зданий приблизьте карту");
+          parts.push("приблизьте для всех зданий");
         }
 
         setLayerInfo(parts.join(" · "));
@@ -247,8 +405,8 @@ export default function Dashboard({
           "fill-opacity": [
             "case",
             ["==", ["get", "category"], ""],
-            0.08,
-            0.26,
+            0.055,
+            0.18,
           ],
         },
       });
@@ -263,14 +421,14 @@ export default function Dashboard({
           "line-opacity": [
             "case",
             ["==", ["get", "category"], ""],
-            0.36,
-            0.9,
+            0.26,
+            0.7,
           ],
           "line-width": [
             "case",
             ["==", ["get", "category"], ""],
-            0.7,
-            1.8,
+            0.65,
+            1.35,
           ],
         },
       });
@@ -291,14 +449,14 @@ export default function Dashboard({
             ["linear"],
             ["zoom"],
             10,
-            4,
+            3.7,
             14,
-            8,
+            7.5,
             18,
-            11,
+            10.5,
           ],
           "circle-color": "#ffffff",
-          "circle-opacity": 0.94,
+          "circle-opacity": 0.88,
         },
       });
 
@@ -313,45 +471,15 @@ export default function Dashboard({
             ["linear"],
             ["zoom"],
             10,
-            2.5,
+            2.1,
             14,
-            6,
+            5.3,
             18,
-            9,
+            8,
           ],
           "circle-color": CATEGORY_COLOR_EXPRESSION,
-          "circle-stroke-width": 0.5,
+          "circle-stroke-width": 0.6,
           "circle-stroke-color": "#ffffff",
-        },
-      });
-
-      map.addSource("analysis-routes", {
-        type: "geojson",
-        data: EMPTY_GEOJSON,
-      });
-
-      map.addLayer({
-        id: "analysis-routes-direct",
-        type: "line",
-        source: "analysis-routes",
-        filter: ["==", ["get", "route_is_osm"], false],
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 3,
-          "line-opacity": 0.72,
-          "line-dasharray": [2, 2],
-        },
-      });
-
-      map.addLayer({
-        id: "analysis-routes-osm",
-        type: "line",
-        source: "analysis-routes",
-        filter: ["==", ["get", "route_is_osm"], true],
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 5,
-          "line-opacity": 0.9,
         },
       });
 
@@ -366,7 +494,19 @@ export default function Dashboard({
         source: "analysis-footprints",
         paint: {
           "fill-color": ["get", "color"],
-          "fill-opacity": 0.38,
+          "fill-opacity": 0.34,
+        },
+      });
+
+      map.addLayer({
+        id: "analysis-footprints-outline-glow",
+        type: "line",
+        source: "analysis-footprints",
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 8,
+          "line-opacity": 0.12,
+          "line-blur": 4,
         },
       });
 
@@ -377,6 +517,50 @@ export default function Dashboard({
         paint: {
           "line-color": ["get", "color"],
           "line-width": 3,
+          "line-opacity": 0.94,
+        },
+      });
+
+      map.addSource("analysis-routes", {
+        type: "geojson",
+        data: EMPTY_GEOJSON,
+      });
+
+      map.addLayer({
+        id: "analysis-routes-glow",
+        type: "line",
+        source: "analysis-routes",
+        filter: ["==", ["get", "route_is_osm"], true],
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 13,
+          "line-opacity": 0.13,
+          "line-blur": 5,
+        },
+      });
+
+      map.addLayer({
+        id: "analysis-routes-direct",
+        type: "line",
+        source: "analysis-routes",
+        filter: ["==", ["get", "route_is_osm"], false],
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3,
+          "line-opacity": 0.68,
+          "line-dasharray": [2, 2],
+        },
+      });
+
+      map.addLayer({
+        id: "analysis-routes-osm",
+        type: "line",
+        source: "analysis-routes",
+        filter: ["==", ["get", "route_is_osm"], true],
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 4.2,
+          "line-opacity": 0.96,
         },
       });
 
@@ -406,7 +590,7 @@ export default function Dashboard({
       const feature = event.features?.[0];
       const properties = featureProperties(feature);
 
-      new maplibregl.Popup({ offset: 12 })
+      new maplibregl.Popup({ offset: 14 })
         .setLngLat(event.lngLat)
         .setDOMContent(
           popupNode(properties.name || properties.category_label, [
@@ -423,12 +607,12 @@ export default function Dashboard({
       if (event.defaultPrevented) {
         return;
       }
-      event.preventDefault();
 
+      event.preventDefault();
       const feature = event.features?.[0];
       const properties = featureProperties(feature);
 
-      new maplibregl.Popup({ offset: 12 })
+      new maplibregl.Popup({ offset: 14 })
         .setLngLat(event.lngLat)
         .setDOMContent(
           popupNode(
@@ -458,27 +642,31 @@ export default function Dashboard({
       }
 
       analysisMarker.current?.remove();
-      analysisMarker.current = new maplibregl.Marker({ color: "#111827" })
+      analysisMarker.current = new maplibregl.Marker({
+        element: createOriginMarker(),
+        anchor: "center",
+      })
         .setLngLat(event.lngLat)
         .addTo(map);
 
-      setStatus("Выполняется расчёт доступности…");
+      setStatus("Анализируем пешеходную доступность…");
 
       try {
-        const result = await analyzePoint(event.lngLat.lat, event.lngLat.lng);
+        const result = await analyzePoint(
+          event.lngLat.lat,
+          event.lngLat.lng,
+        );
         setAnalysis(result);
 
-        const osmRoutes = result.results.filter(
+        const routes = result.results.filter(
           (item) => item.route_is_osm,
         ).length;
-        const foundObjects = result.results.filter(
-          (item) => item.object,
-        ).length;
+        const found = result.results.filter((item) => item.object).length;
 
         setStatus(
-          osmRoutes > 0
-            ? `Построено маршрутов по пешеходному графу: ${osmRoutes} из ${foundObjects}`
-            : "Для выбранной точки маршрут по пешеходному графу не построен",
+          routes > 0
+            ? `Построено маршрутов по графу OSM: ${routes} из ${found}`
+            : "Маршрут по пешеходному графу для выбранной точки не найден",
         );
       } catch (error) {
         setStatus(
@@ -492,6 +680,7 @@ export default function Dashboard({
     return () => {
       requestNumber.current += 1;
       analysisMarker.current?.remove();
+      targetMarkers.current.forEach((marker) => marker.remove());
       map.remove();
       mapRef.current = null;
     };
@@ -504,6 +693,9 @@ export default function Dashboard({
       return;
     }
 
+    targetMarkers.current.forEach((marker) => marker.remove());
+    targetMarkers.current = [];
+
     const routeFeatures: GeoJSON.Feature[] =
       analysis?.results
         .filter((item) => item.route_geometry)
@@ -512,7 +704,8 @@ export default function Dashboard({
           geometry: item.route_geometry!,
           properties: {
             category: item.category,
-            color: CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
+            color:
+              CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
             route_is_osm: item.route_is_osm,
           },
         })) || [];
@@ -525,7 +718,8 @@ export default function Dashboard({
           geometry: item.object!.footprint as GeoJSON.Geometry,
           properties: {
             category: item.category,
-            color: CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
+            color:
+              CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
           },
         })) || [];
 
@@ -538,110 +732,257 @@ export default function Dashboard({
       type: "FeatureCollection",
       features: footprintFeatures,
     });
+
+    for (const item of analysis?.results || []) {
+      if (!item.object || !item.route_geometry) {
+        continue;
+      }
+
+      const marker = new maplibregl.Marker({
+        element: createTargetMarker(item),
+        anchor: "center",
+      })
+        .setLngLat([item.object.longitude, item.object.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 24 }).setDOMContent(
+            popupNode(item.object.name, [
+              ["Категория", item.category_label],
+              ["Расстояние", item.distance_m !== null
+                ? formatDistance(item.distance_m)
+                : ""],
+              ["Адрес", item.object.address],
+            ]),
+          ),
+        )
+        .addTo(map);
+
+      targetMarkers.current.push(marker);
+    }
   }, [analysis, mapReady]);
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div>
-          <strong>Оценка социальной инфраструктуры</strong>
-          <span>Анализ обеспеченности урбанизированной территории</span>
+        <div className="brand">
+          <div className="brand-mark">
+            <UiIcon name="map" size={20} />
+          </div>
+          <div className="brand-copy">
+            <strong>Urban Access</strong>
+            <span>ГИС оценки социальной инфраструктуры</span>
+          </div>
         </div>
 
-        <div className="user-box">
+        <div className="topbar-actions">
+          <div className="system-status">
+            <span className="status-dot" />
+            PostGIS подключён
+          </div>
+
           <button
             type="button"
-            className="theme-toggle"
+            className="icon-button"
             onClick={onToggleTheme}
+            title={
+              theme === "light"
+                ? "Включить тёмную тему"
+                : "Включить светлую тему"
+            }
             aria-label={
               theme === "light"
-                ? "Переключить на тёмную тему"
-                : "Переключить на светлую тему"
+                ? "Включить тёмную тему"
+                : "Включить светлую тему"
             }
           >
-            <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
-            {theme === "light" ? "Тёмная тема" : "Светлая тема"}
+            <UiIcon name={theme === "light" ? "moon" : "sun"} />
           </button>
-          <span className="username">{user.username}</span>
-          <button onClick={onLogout}>Выйти</button>
+
+          <div className="user-pill">
+            <span className="user-avatar">
+              {user.username.slice(0, 1).toUpperCase()}
+            </span>
+            <span>{user.username}</span>
+          </div>
+
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onLogout}
+            title="Выйти"
+            aria-label="Выйти"
+          >
+            <UiIcon name="logout" />
+          </button>
         </div>
       </header>
 
       <div className="workspace">
         <aside className="sidebar">
-          <div className="panel-heading">
-            <span className="eyebrow">АНАЛИЗ ТОЧКИ</span>
-            <h2>Ближайшая инфраструктура</h2>
+          <section className="sidebar-intro">
+            <div className="section-kicker">
+              <UiIcon name="sparkles" size={15} />
+              Пространственный анализ
+            </div>
+            <h1>Ближайшая инфраструктура</h1>
             <p>{status}</p>
-          </div>
+          </section>
 
-          {!analysis && (
-            <div className="empty-state">
-              Поставьте точку на свободной области карты. Система найдёт
-              ближайший объект каждой категории, построит маршрут и сравнит
-              расстояние с нормативом.
+          {analysis ? (
+            <div className="analysis-summary">
+              <div className="summary-card">
+                <span className="summary-icon">
+                  <UiIcon name="layers" size={17} />
+                </span>
+                <div>
+                  <strong>{summary.found}</strong>
+                  <span>объектов</span>
+                </div>
+              </div>
+              <div className="summary-card">
+                <span className="summary-icon">
+                  <UiIcon name="route" size={17} />
+                </span>
+                <div>
+                  <strong>{summary.routes}</strong>
+                  <span>маршрутов</span>
+                </div>
+              </div>
+              <div className="summary-card">
+                <span className="summary-icon">
+                  <UiIcon name="check" size={17} />
+                </span>
+                <div>
+                  <strong>{summary.compliant}</strong>
+                  <span>в нормативе</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state modern-empty">
+              <span className="empty-icon">
+                <UiIcon name="crosshair" size={24} />
+              </span>
+              <div>
+                <strong>Укажите точку анализа</strong>
+                <p>
+                  Нажмите на свободную область карты. Система найдёт
+                  инфраструктуру, построит пешеходные маршруты и подсветит
+                  геометрию целевых объектов.
+                </p>
+              </div>
             </div>
           )}
 
           <div className="results">
-            {analysis?.results.map((item) => (
-              <article className="result-card" key={item.category}>
-                <div
-                  className="category-stripe"
-                  style={{
-                    backgroundColor:
-                      CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other,
-                  }}
-                />
+            {analysis?.results.map((item) => {
+              const color =
+                CATEGORY_COLORS[item.category] || CATEGORY_COLORS.other;
 
-                <div className="result-content">
-                  <div className="result-title-row">
-                    <strong>{item.category_label}</strong>
-                    <span
-                      className={`compliance ${
-                        item.compliant === true
-                          ? "ok"
-                          : item.compliant === false
-                            ? "bad"
-                            : "neutral"
-                      }`}
-                    >
-                      {item.compliant === true
-                        ? "Соответствует"
-                        : item.compliant === false
-                          ? "Не соответствует"
-                          : "Нет оценки"}
-                    </span>
+              return (
+                <article
+                  className={`result-card ${
+                    item.object ? "has-object" : "no-object"
+                  }`}
+                  key={item.category}
+                >
+                  <div
+                    className="result-category-icon"
+                    style={{
+                      backgroundColor: color,
+                      boxShadow: `0 10px 26px ${color}2d`,
+                    }}
+                  >
+                    {CATEGORY_LETTERS[item.category] || "•"}
                   </div>
 
-                  <span>{item.object?.name || item.message}</span>
+                  <div className="result-content">
+                    <div className="result-title-row">
+                      <strong>{item.category_label}</strong>
+                      <span
+                        className={`compliance ${
+                          item.compliant === true
+                            ? "ok"
+                            : item.compliant === false
+                              ? "bad"
+                              : "neutral"
+                        }`}
+                      >
+                        {item.compliant === true
+                          ? "В нормативе"
+                          : item.compliant === false
+                            ? "Выше нормы"
+                            : "Без оценки"}
+                      </span>
+                    </div>
 
-                  {item.distance_m !== null && (
-                    <>
-                      <b className="distance">
-                        {formatDistance(item.distance_m)}
-                      </b>
-                      <small>
-                        {item.normative_distance_m
-                          ? `Норматив: не более ${formatDistance(
-                              item.normative_distance_m,
-                            )}`
-                          : "Норматив расстояния не задан"}
-                      </small>
-                      <small>{item.distance_method}</small>
-                    </>
-                  )}
-                </div>
-              </article>
-            ))}
+                    <span className="object-name">
+                      {item.object?.name || item.message}
+                    </span>
+
+                    {item.distance_m !== null && (
+                      <div className="result-metrics">
+                        <div>
+                          <b>{formatDistance(item.distance_m)}</b>
+                          <small>по маршруту</small>
+                        </div>
+                        <div>
+                          <b>
+                            {item.normative_distance_m
+                              ? formatDistance(item.normative_distance_m)
+                              : "—"}
+                          </b>
+                          <small>норматив</small>
+                        </div>
+                      </div>
+                    )}
+
+                    {item.object && (
+                      <div className="result-meta">
+                        <span>
+                          <UiIcon name="route" size={13} />
+                          {item.distance_method}
+                        </span>
+                        {item.object.footprint && (
+                          <span>
+                            <UiIcon name="layers" size={13} />
+                            Геометрия объекта найдена
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </aside>
 
         <main className="map-area">
-          <div className="map-hint">
-            <strong>Данные PostGIS</strong>
-            <span>{layerInfo}</span>
+          <div className="map-data-card">
+            <span className="map-data-icon">
+              <UiIcon name="database" size={18} />
+            </span>
+            <div>
+              <strong>Пространственные данные</strong>
+              <span>{layerInfo}</span>
+            </div>
           </div>
+
+          <div className="map-legend">
+            <span>
+              <i className="legend-point" />
+              объект
+            </span>
+            <span>
+              <i className="legend-target">А</i>
+              цель маршрута
+            </span>
+            <span>
+              <i className="legend-line" />
+              пешеходный путь
+            </span>
+          </div>
+
           <div ref={mapContainer} className="map" />
         </main>
       </div>
