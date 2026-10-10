@@ -99,8 +99,6 @@ class SocialObject(models.Model):
     source_id = models.CharField(max_length=255, blank=True, db_index=True)
     osm_type = models.CharField(max_length=16, blank=True)
     osm_id = models.BigIntegerField(null=True, blank=True, db_index=True)
-    osm_tags = models.JSONField(default=dict, blank=True)
-
     import_run = models.ForeignKey(
         OsmImportRun,
         null=True,
