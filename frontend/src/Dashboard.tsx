@@ -420,8 +420,8 @@ function createWalkerMarker(item: AnalysisResult) {
   const badge = document.createElement("span");
   badge.className = "walker-limit-badge";
 
-  rotator.append(person, badge);
-  shell.appendChild(rotator);
+  rotator.appendChild(person);
+  shell.append(rotator, badge);
   shell.title = `Пешеход: ${item.category_label}`;
 
   return { shell, rotator, badge };
@@ -951,12 +951,13 @@ export default function Dashboard({
         normativeDistance > 0 &&
         routeDistance > normativeDistance;
 
-      const targetRatio = exceedsNormative
-        ? Math.max(
-            0,
-            Math.min(1, normativeDistance / routeDistance),
-          )
-        : 1;
+      const targetRatio =
+        exceedsNormative && normativeDistance !== null
+          ? Math.max(
+              0,
+              Math.min(1, normativeDistance / routeDistance),
+            )
+          : 1;
       const targetRouteDistance = profile.total * targetRatio;
 
       const { shell, rotator, badge } = createWalkerMarker(item);
