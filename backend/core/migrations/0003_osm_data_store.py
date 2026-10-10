@@ -223,11 +223,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="roadedge",
-            name="osm_tags",
-            field=models.JSONField(blank=True, default=dict),
-        ),
-        migrations.AddField(
-            model_name="roadedge",
             name="import_run",
             field=models.ForeignKey(
                 blank=True,
