@@ -939,7 +939,7 @@ input:focus-visible {
  * вся визуальная анимация происходит только внутри них.
  */
 .origin-marker-shell {
-  position: relative;
+  position: absolute;
   width: 30px;
   height: 30px;
   display: grid;
@@ -948,16 +948,16 @@ input:focus-visible {
 }
 
 .target-marker-shell {
-  position: relative;
+  position: absolute;
   width: 38px;
-  height: 38px;
+  height: 44px;
   display: grid;
-  place-items: center;
+  place-items: start center;
 }
 
 .walker-marker-shell {
   --walker-color: #2563eb;
-  position: relative;
+  position: absolute;
   width: 34px;
   height: 38px;
   display: grid;
@@ -1359,11 +1359,11 @@ input:focus-visible {
 @keyframes marker-pop {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.72);
+    transform: scale(0.72);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
 }
 
