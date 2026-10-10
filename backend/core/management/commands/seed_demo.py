@@ -34,6 +34,12 @@ class Command(BaseCommand):
     help = "Создаёт демонстрационные объекты и нормативы для локальной проверки."
 
     def handle(self, *args, **options):
+        if SocialObject.objects.filter(source="osm").exists():
+            self.stdout.write(
+                "В базе уже есть данные OSM. Демонстрационные объекты не добавляются."
+            )
+            return
+
         for index, (name, category, lat, lon, address, capacity, unit) in enumerate(OBJECTS):
             SocialObject.objects.update_or_create(
                 source="demo",
