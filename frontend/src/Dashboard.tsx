@@ -1218,6 +1218,15 @@ export default function Dashboard({
                             Геометрия объекта найдена
                           </span>
                         )}
+                        {item.route_is_osm &&
+                          item.compliant === false &&
+                          item.normative_distance_m !== null && (
+                            <span className="norm-animation-hint">
+                              <UiIcon name="crosshair" size={13} />
+                              Пешеход остановится на{" "}
+                              {formatDistance(item.normative_distance_m)}
+                            </span>
+                          )}
                       </div>
                     )}
                   </div>
@@ -1250,6 +1259,10 @@ export default function Dashboard({
             <span>
               <i className="legend-line" />
               пешеходный путь
+            </span>
+            <span>
+              <i className="legend-walker">●</i>
+              движение по нормативу
             </span>
           </div>
 
