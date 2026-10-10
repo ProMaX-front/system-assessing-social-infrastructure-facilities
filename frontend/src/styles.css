@@ -756,6 +756,11 @@ input:focus-visible {
   line-height: 1.35;
 }
 
+.result-meta .norm-animation-hint {
+  color: var(--danger);
+  font-weight: 750;
+}
+
 .compliance {
   flex: 0 0 auto;
   padding: 4px 7px;
@@ -910,6 +915,20 @@ input:focus-visible {
   background: #2563eb;
   border-radius: 999px;
   box-shadow: 0 0 8px rgba(37, 99, 235, 0.3);
+}
+
+.legend-walker {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  color: #f1c7a5;
+  background: #2563eb;
+  border: 2px solid white;
+  border-radius: 50% 50% 42% 42%;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
+  font-style: normal;
+  font-size: 7px;
 }
 
 /* Analysis markers */
