@@ -611,7 +611,6 @@ class OsmTyumenImporter:
                     drive_backward=drive_backward,
                     bridge=_is_truthy_osm(_tag(tags, "bridge")),
                     tunnel=_is_truthy_osm(_tag(tags, "tunnel")),
-                    osm_tags=tags,
                     import_run=self.import_run,
                 )
             )
@@ -802,6 +801,10 @@ class OsmTyumenImporter:
             self._flush_buildings()
             self._flush_social()
             self._classify_buildings_by_infrastructure()
+
+            # После появления реальных данных тестовые точки больше не должны
+            # участвовать в расчётах ближайшей инфраструктуры.
+            SocialObject.objects.filter(source="demo").delete()
 
             nodes_count = RoadNode.objects.count()
             edges_count = RoadEdge.objects.count()
