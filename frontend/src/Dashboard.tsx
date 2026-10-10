@@ -899,14 +899,14 @@ export default function Dashboard({
           item.route_geometry.coordinates.length >= 2,
       ) || [];
 
-    routedItems.forEach((item, index) => {
+    routedItems.forEach((item) => {
       if (!item.object || !item.route_geometry) {
         return;
       }
 
       const targetMarker = new maplibregl.Marker({
         element: createTargetMarker(item),
-        anchor: "center",
+        anchor: "bottom",
       })
         .setLngLat([item.object.longitude, item.object.latitude])
         .setPopup(
@@ -973,36 +973,27 @@ export default function Dashboard({
       rotator.style.transform = `rotate(${initial.bearing}deg)`;
       walkerMarkers.current.push(walkerMarker);
 
-      const delay = 320 + index * 90;
-      const duration =
-        2200 + Math.min(2800, targetRouteDistance * 2.2);
-      const createdAt = performance.now();
+      // Все пешеходы идут заметно медленнее и синхронно повторяют цикл:
+      // 8,5 с движения -> 15 с ожидания -> возврат в общую точку A.
+      const travelDuration = 8_500;
+      const holdDuration = 15_000;
+      const initialDelay = 450;
+      const cycleDuration = travelDuration + holdDuration;
+      const animationStart = performance.now() + initialDelay;
 
-      const animate = (now: number) => {
-        if (walkerAnimationEpoch.current !== animationEpoch) {
-          return;
-        }
-
-        const elapsed = now - createdAt - delay;
-        if (elapsed < 0) {
-          requestAnimationFrame(animate);
-          return;
-        }
-
-        const progress = Math.min(1, elapsed / duration);
-        const current = pointAtRouteDistance(
-          profile,
-          targetRouteDistance * progress,
+      const resetWalker = () => {
+        shell.classList.remove(
+          "is-stopped",
+          "is-limit",
+          "is-arrived",
         );
+        badge.textContent = "";
+        walkerMarker.setLngLat(initial.coordinate);
+        rotator.style.transform = `rotate(${initial.bearing}deg)`;
+        shell.title = `Пешеход: ${item.category_label}`;
+      };
 
-        walkerMarker.setLngLat(current.coordinate);
-        rotator.style.transform = `rotate(${current.bearing}deg)`;
-
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-          return;
-        }
-
+      const stopWalker = () => {
         shell.classList.add("is-stopped");
 
         if (exceedsNormative && normativeDistance !== null) {
@@ -1012,12 +1003,62 @@ export default function Dashboard({
             `${item.category_label}: нормативная дистанция исчерпана`;
         } else {
           shell.classList.add("is-arrived");
-          badge.textContent = "Доступно";
           shell.title =
             `${item.category_label}: объект достигнут в пределах норматива`;
         }
       };
 
+      let previousCycle = -1;
+
+      const animate = (now: number) => {
+        if (walkerAnimationEpoch.current !== animationEpoch) {
+          return;
+        }
+
+        if (now < animationStart) {
+          requestAnimationFrame(animate);
+          return;
+        }
+
+        const elapsed = now - animationStart;
+        const cycle = Math.floor(elapsed / cycleDuration);
+        const cycleElapsed = elapsed % cycleDuration;
+
+        if (cycle !== previousCycle) {
+          previousCycle = cycle;
+          resetWalker();
+        }
+
+        if (cycleElapsed <= travelDuration) {
+          const rawProgress = cycleElapsed / travelDuration;
+
+          // Мягкий старт/финиш без резкого ускорения.
+          const progress =
+            rawProgress < 0.5
+              ? 2 * rawProgress * rawProgress
+              : 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
+
+          const current = pointAtRouteDistance(
+            profile,
+            targetRouteDistance * progress,
+          );
+
+          walkerMarker.setLngLat(current.coordinate);
+          rotator.style.transform = `rotate(${current.bearing}deg)`;
+        } else if (!shell.classList.contains("is-stopped")) {
+          const current = pointAtRouteDistance(
+            profile,
+            targetRouteDistance,
+          );
+          walkerMarker.setLngLat(current.coordinate);
+          rotator.style.transform = `rotate(${current.bearing}deg)`;
+          stopWalker();
+        }
+
+        requestAnimationFrame(animate);
+      };
+
+      resetWalker();
       requestAnimationFrame(animate);
     });
 
