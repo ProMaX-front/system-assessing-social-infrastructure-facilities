@@ -26,7 +26,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Syntax check
+      - name: Проверка синтаксиса
         run: python -m compileall backend
-      - name: Build backend image
+      - name: Сборка backend
         run: docker build -t social-infrastructure-backend ./backend
+      - name: Проверка миграций Django
+        run: >
+          docker run --rm
+          -e POSTGRES_HOST=localhost
+          social-infrastructure-backend
+          python manage.py makemigrations --check --dry-run
