@@ -228,6 +228,48 @@ class MapLayersView(APIView):
         )
 
 
+def _analysis_geometry_for_object(obj):
+    """
+    Возвращает наиболее полную реальную геометрию объекта для подсветки
+    результата анализа: собственный контур OSM, связанное здание либо
+    здание, пространственно содержащее точечный объект.
+    """
+    if obj.footprint:
+        return json.loads(obj.footprint.geojson)
+
+    building = None
+
+    if obj.osm_type and obj.osm_id:
+        building = OsmBuilding.objects.filter(
+            osm_type=obj.osm_type,
+            osm_id=obj.osm_id,
+        ).only("geometry").first()
+
+    if building is None:
+        building = (
+            OsmBuilding.objects.filter(
+                infrastructure_category=obj.category,
+                geometry__covers=obj.geometry,
+            )
+            .only("geometry")
+            .first()
+        )
+
+    if building is None:
+        building = (
+            OsmBuilding.objects.filter(
+                geometry__covers=obj.geometry,
+            )
+            .only("geometry")
+            .first()
+        )
+
+    if building:
+        return json.loads(building.geometry.geojson)
+
+    return None
+
+
 class NearestAnalysisView(APIView):
     def post(self, request):
         try:
@@ -297,10 +339,15 @@ class NearestAnalysisView(APIView):
                 distance_method = "По прямой — дорожный граф OSM ещё не импортирован"
 
             limit = normative.max_distance_m if normative else None
+            object_data = SocialObjectSerializer(nearest).data
+            analysis_geometry = _analysis_geometry_for_object(nearest)
+            if analysis_geometry is not None:
+                object_data["footprint"] = analysis_geometry
+
             results.append({
                 "category": category,
                 "category_label": category_label,
-                "object": SocialObjectSerializer(nearest).data,
+                "object": object_data,
                 "distance_m": distance_m,
                 "direct_distance_m": direct_distance_m,
                 "normative_distance_m": limit,
