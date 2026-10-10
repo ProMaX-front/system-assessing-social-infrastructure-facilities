@@ -33,6 +33,18 @@ for i in {1..60}; do
   sleep 2
 done
 
+echo "Проверяю целостность незавершённых миграций..."
+docker compose exec -T db psql \
+  -U "${POSTGRES_USER:-infrastructure}" \
+  -d "${POSTGRES_DB:-infrastructure}" \
+  -v ON_ERROR_STOP=1 \
+  -c "DO \$\$ BEGIN
+        IF to_regclass('public.core_osmimportrun') IS NULL
+           AND to_regclass('public.core_osmimportrun_id_seq') IS NOT NULL THEN
+          DROP SEQUENCE public.core_osmimportrun_id_seq CASCADE;
+        END IF;
+      END \$\$;"
+
 echo "Применяю миграции..."
 docker compose run --rm --no-deps backend python manage.py migrate
 
