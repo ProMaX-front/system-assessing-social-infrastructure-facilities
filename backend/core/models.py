@@ -114,9 +114,18 @@ class SocialObject(models.Model):
     class Meta:
         ordering = ["category", "name"]
         indexes = [
-            models.Index(fields=["category", "is_active"]),
-            models.Index(fields=["source", "source_id"]),
-            models.Index(fields=["osm_type", "osm_id"]),
+            models.Index(
+                fields=["category", "is_active"],
+                name="core_social_categor_a83fa5_idx",
+            ),
+            models.Index(
+                fields=["source", "source_id"],
+                name="core_social_source_35a47d_idx",
+            ),
+            models.Index(
+                fields=["osm_type", "osm_id"],
+                name="social_osm_type_id_idx",
+            ),
         ]
 
     def __str__(self):
@@ -162,7 +171,10 @@ class OsmBuilding(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=["infrastructure_category", "building_type"]),
+            models.Index(
+                fields=["infrastructure_category", "building_type"],
+                name="building_cat_type_idx",
+            ),
         ]
 
     def __str__(self):
@@ -266,9 +278,18 @@ class RoadEdge(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["source_osm_id", "target_osm_id"]),
-            models.Index(fields=["walkable", "highway"]),
-            models.Index(fields=["drivable", "highway"]),
+            models.Index(
+                fields=["source_osm_id", "target_osm_id"],
+                name="core_roaded_source__9510a9_idx",
+            ),
+            models.Index(
+                fields=["walkable", "highway"],
+                name="core_roaded_walkabl_02031e_idx",
+            ),
+            models.Index(
+                fields=["drivable", "highway"],
+                name="road_drive_highway_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
