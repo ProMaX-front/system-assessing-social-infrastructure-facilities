@@ -175,6 +175,54 @@ input:focus-visible {
   line-height: 1.65;
 }
 
+.auth-kicker {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  margin-bottom: 18px;
+  padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.auth-kicker-dot {
+  width: 7px;
+  height: 7px;
+  background: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+.auth-feature-row {
+  position: relative;
+  z-index: 1;
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auth-feature-row span {
+  padding: 8px 11px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(32, 55, 86, 0.05);
+  backdrop-filter: blur(14px);
+  font-size: 11px;
+  font-weight: 750;
+}
+
 .auth-card {
   position: relative;
   z-index: 2;
@@ -188,6 +236,41 @@ input:focus-visible {
   box-shadow: var(--shadow);
   backdrop-filter: blur(24px);
   animation: card-in 0.5s ease-out both;
+}
+
+.auth-card-brand {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-card-logo {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(145deg, #2563eb, #0ea5e9);
+  border-radius: 13px;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: -0.03em;
+}
+
+.auth-card-brand > div {
+  display: grid;
+  gap: 1px;
+}
+
+.auth-card-brand strong {
+  font-size: 13px;
+}
+
+.auth-card-brand span:not(.auth-card-logo) {
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .auth-card h2 {
