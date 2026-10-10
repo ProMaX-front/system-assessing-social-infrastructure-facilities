@@ -1,13 +1,14 @@
 import json
 import math
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone as datetime_timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import osmium
 import requests
 from django.contrib.gis.geos import GEOSGeometry, LineString, MultiPolygon, Point
+from django.db import connection
 from django.utils import timezone
 
 from .models import (
@@ -381,7 +382,7 @@ class OsmTyumenImporter:
         if source_timestamp is None:
             source_timestamp = datetime.fromtimestamp(
                 SOURCE_PBF.stat().st_mtime,
-                tz=timezone.utc,
+                tz=datetime_timezone.utc,
             )
 
         if (
@@ -694,6 +695,64 @@ class OsmTyumenImporter:
         OsmBuilding.objects.all().delete()
         SocialObject.objects.filter(source="osm").delete()
 
+    def _classify_buildings_by_infrastructure(self):
+        """
+        Дополняет категорию здания пространственно:
+        1) по попаданию центра здания в территорию объекта инфраструктуры;
+        2) по попаданию точечного OSM-объекта инфраструктуры внутрь здания.
+
+        Это позволяет определить тип даже для building=yes, когда назначение
+        вынесено в отдельный amenity/shop/leisure объект.
+        """
+        self.log(
+            "Пространственная классификация зданий по объектам инфраструктуры..."
+        )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                WITH candidates AS (
+                    SELECT DISTINCT ON (b.id)
+                        b.id AS building_id,
+                        s.category
+                    FROM core_osmbuilding b
+                    JOIN core_socialobject s
+                      ON s.source = 'osm'
+                     AND s.footprint IS NOT NULL
+                     AND ST_Covers(s.footprint, b.centroid)
+                    WHERE b.infrastructure_category = ''
+                    ORDER BY
+                        b.id,
+                        ST_Area(s.footprint::geography) ASC
+                )
+                UPDATE core_osmbuilding AS b
+                   SET infrastructure_category = c.category
+                  FROM candidates AS c
+                 WHERE b.id = c.building_id
+                """
+            )
+
+            cursor.execute(
+                """
+                WITH candidates AS (
+                    SELECT DISTINCT ON (b.id)
+                        b.id AS building_id,
+                        s.category
+                    FROM core_osmbuilding b
+                    JOIN core_socialobject s
+                      ON s.source = 'osm'
+                     AND s.footprint IS NULL
+                     AND ST_Covers(b.geometry, s.geometry)
+                    WHERE b.infrastructure_category = ''
+                    ORDER BY b.id, s.id
+                )
+                UPDATE core_osmbuilding AS b
+                   SET infrastructure_category = c.category
+                  FROM candidates AS c
+                 WHERE b.id = c.building_id
+                """
+            )
+
     def import_data(self, refresh=False):
         self._load_boundary(refresh=refresh)
         source_timestamp = self._prepare_files(refresh=refresh)
@@ -742,6 +801,7 @@ class OsmTyumenImporter:
             self._flush_graph()
             self._flush_buildings()
             self._flush_social()
+            self._classify_buildings_by_infrastructure()
 
             nodes_count = RoadNode.objects.count()
             edges_count = RoadEdge.objects.count()
