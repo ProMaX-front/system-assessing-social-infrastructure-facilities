@@ -3,6 +3,7 @@ import maplibregl, {
   GeoJSONSource,
   Map,
   Marker,
+  type ExpressionSpecification,
   type MapGeoJSONFeature,
   type StyleSpecification,
 } from "maplibre-gl";
@@ -36,7 +37,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   other: "#64748b",
 };
 
-const CATEGORY_COLOR_EXPRESSION: maplibregl.ExpressionSpecification = [
+const CATEGORY_COLOR_EXPRESSION: ExpressionSpecification = [
   "match",
   ["get", "category"],
   "school",
