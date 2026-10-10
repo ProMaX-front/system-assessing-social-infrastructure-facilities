@@ -48,7 +48,7 @@ echo "Запускаю backend..."
 docker compose up -d backend
 
 echo ""
-echo "Начинаю полную синхронизацию OpenStreetMap по Тюменской области."
+echo "Начинаю импорт OpenStreetMap по Тюменской области."
 echo "Будут загружены:"
 echo "  - автомобильный граф;"
 echo "  - пешеходный граф;"
@@ -60,7 +60,7 @@ echo "После распаковки и загрузки в PostGIS потре�
 echo "Операция может занять продолжительное время."
 echo ""
 
-docker compose exec backend python manage.py import_osm_tyumen --refresh
+docker compose exec backend python manage.py import_osm_tyumen
 
 echo ""
 echo "Проверяю загруженные данные..."
