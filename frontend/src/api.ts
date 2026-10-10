@@ -20,6 +20,19 @@ export type SocialObject = {
   source_id: string;
 };
 
+export type MapLayersResponse = {
+  social_objects: GeoJSON.FeatureCollection<GeoJSON.Point>;
+  buildings: GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+  meta: {
+    zoom: number;
+    social_objects_count: number;
+    buildings_count: number;
+    social_objects_truncated: boolean;
+    buildings_truncated: boolean;
+    all_buildings_visible: boolean;
+  };
+};
+
 export type AnalysisResult = {
   category: string;
   category_label: string;
@@ -173,6 +186,23 @@ export async function getMe() {
 
 export async function getSocialObjects() {
   return request<SocialObject[]>("/social-objects/");
+}
+
+export async function getMapLayers(
+  bbox: [number, number, number, number],
+  zoom: number,
+  categories: string[] = [],
+) {
+  const params = new URLSearchParams({
+    bbox: bbox.join(","),
+    zoom: String(zoom),
+  });
+
+  if (categories.length) {
+    params.set("categories", categories.join(","));
+  }
+
+  return request<MapLayersResponse>(`/map/layers/?${params.toString()}`);
 }
 
 export async function analyzePoint(latitude: number, longitude: number) {
