@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       gdal-bin libgdal-dev binutils libproj-dev \
+       gdal-bin libgdal-dev binutils libproj-dev osmium-tool \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
